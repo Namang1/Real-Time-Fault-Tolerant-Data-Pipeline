@@ -1,4 +1,4 @@
-version: '3.8'
+#version: '3.8'
 
 services:
   zookeeper:
@@ -10,19 +10,27 @@ services:
     volumes:
       - zk-data:/var/lib/zookeeper/data
       - zk-log:/var/lib/zookeeper/log
+    networks:
+      - spark-network
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
     depends_on:
       - zookeeper
     ports:
       - "9092:9092"
       - "29092:29092"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -36,6 +44,20 @@ services:
       KAFKA_REPLICA_FETCH_MAX_BYTES: 52428800
     volumes:
       - kafka-data:/var/lib/kafka/data
+    networks:
+      - spark-network
+
+  schema-registry:
+      image: confluentinc/cp-schema-registry:7.6.0
+      depends_on:
+        - kafka
+      ports:
+        - "8012:8081"
+      environment:
+        SCHEMA_REGISTRY_HOST_NAME: schema-registry
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      networks:
+        - spark-network
 
   kafka-ui:
     image: provectuslabs/kafka-ui
@@ -47,53 +69,160 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
       KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
       KAFKA_CLUSTERS_0_CONSUMER_PROPERTIES_GROUP_ID: kafka-ui-group
+    networks:
+      - spark-network
+
+  create-topic:
+    build:
+      context: ./topic_admin
+    container_name: topic-admin
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - spark-network
+
+
+  clickstream-producer:
+    build:
+      context: ./clickstream_producer
+    container_name: clickstream-producer
+    depends_on:
+      - create-topic
+    networks:
+      - spark-network
 
   spark-master:
-    image: bitnami/spark:latest
+    image: bitnami/spark:3.3.1
+    build:
+      context: ./spark
     container_name: spark-master
     environment:
       - SPARK_MODE=master
+      - SPARK_MASTER_WEBUI_PORT=9080
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_RPC_ENCRYPTION_ENABLED=no
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
-      - SPARK_MASTER_WEBUI_PORT=9080
     ports:
-      - "9080:9080"  # Spark Web UI
-      - "7077:7077"  # Spark master port
+      - "9080:9080"
+      - "7077:7077"
     networks:
       - spark-network
 
   spark-worker-1:
-    image: bitnami/spark:latest
+    image: bitnami/spark:3.3.1
+    build:
+      context: ./spark
     container_name: spark-worker-1
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
       - SPARK_WORKER_MEMORY=1G
       - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_WEBUI_PORT=9081
     depends_on:
       - spark-master
     ports:
-      - "9081:9081"  # Web UI for worker 1
+      - "9081:9081"
     networks:
       - spark-network
 
   spark-worker-2:
-    image: bitnami/spark:latest
+    image: bitnami/spark:3.3.1
+    build:
+      context: ./spark
     container_name: spark-worker-2
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
       - SPARK_WORKER_MEMORY=1G
       - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_WEBUI_PORT=9082
     depends_on:
       - spark-master
     ports:
-      - "9082:9081"  # Web UI for worker 2
+      - "9082:9082"
     networks:
       - spark-network
 
+  jupyter:
+    image: jupyter/pyspark-notebook:spark-3.3.1
+    container_name: jupyter-spark
+    environment:
+      - PYSPARK_SUBMIT_ARGS=--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.1,org.apache.spark:spark-avro_2.12:3.3.1,io.confluent:kafka-schema-registry-client:7.5.0,io.confluent:kafka-avro-serializer:7.5.0 --master spark://spark-master:7077 pyspark-shell
+    ports:
+      - "8888:8888"
+    networks:
+      - spark-network
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    depends_on:
+      - spark-master
+
+  airflow-webserver:
+    image: apache/airflow:2.9.1-python3.10
+    build:
+      context: ./airflow
+    container_name: airflow-webserver
+    restart: always
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - airflow-db-volume:/opt/airflow/
+      - ./parquet_output:/opt/airflow/parquet_output
+      - /var/run/docker.sock:/var/run/docker.sock
+
+
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    networks:
+      - spark-network
+    depends_on:
+      - spark-master
+      - kafka
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Naman --lastname Goyal --role Admin --email namangoyal1000@gmail.com &&
+        airflow webserver
+      "
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1-python3.10
+    build:
+      context: ./airflow
+    container_name: airflow-scheduler
+    restart: always
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - airflow-db-volume:/opt/airflow/
+      - ./parquet_output:/opt/airflow/parquet_output
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    networks:
+      - spark-network
+    depends_on:
+      - airflow-webserver
+    command: >
+          bash -c "
+            while [ ! -f /opt/airflow/airflow.db ]; do
+              echo 'Waiting for airflow.db to be initialized...';
+              sleep 3;
+            done &&
+            airflow scheduler
+          "
 networks:
   spark-network:
     driver: bridge
@@ -102,3 +231,4 @@ volumes:
   kafka-data:
   zk-data:
   zk-log:
+  airflow-db-volume:
