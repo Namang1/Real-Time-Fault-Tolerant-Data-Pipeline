@@ -9,7 +9,9 @@ import json
 
 # -------------------- Configs --------------------
 KAFKA_BOOTSTRAP_SERVERS = "kafka:9092"
+# KAFKA_BOOTSTRAP_SERVERS = "localhost:29092"
 SCHEMA_REGISTRY_URL = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")
+# SCHEMA_REGISTRY_URL = os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:8012")
 TOPIC_NAME = "clickstream"
 SCHEMA_SUBJECT = f"{TOPIC_NAME}-value"
 

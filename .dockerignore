@@ -1,4 +1,12 @@
 __pycache__/
 *.pyc
-.venv/
+*.pyo
+*.pyd
+.idea/
+*.ipynb
+*.log
+data/
 .env
+venv/
+venvnulldummy/
+spark-warehouse/

@@ -3,7 +3,7 @@ FROM apache/airflow:2.9.1-python3.10
 # Switch to root to install system packages
 USER root
 
-# Install system dependencies for confluent-kafka and poetry
+# Install system dependencies and Python tools
 RUN apt-get update && apt-get install -y \
     gcc \
     libffi-dev \
@@ -11,11 +11,13 @@ RUN apt-get update && apt-get install -y \
     libsnappy-dev \
     librdkafka-dev \
     curl \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip \
+    python3-venv \
+    build-essential \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+# Install Poetry (safe method)
+RUN pip3 install poetry==1.8.2
 
 # Add Poetry to PATH
 ENV PATH="/root/.local/bin:$PATH"
