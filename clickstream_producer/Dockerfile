@@ -13,5 +13,4 @@ RUN apt-get update && apt-get install -y curl && \
 
 COPY . .
 
-# Default command (overridden in docker-compose)
 CMD ["python", "producer.py"]

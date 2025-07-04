@@ -5,15 +5,13 @@ from confluent_kafka.serialization import StringSerializer
 
 import time, uuid, random
 
-# Kafka + Schema Registry config
 schema_registry_conf = {
-    'url': 'http://schema-registry:8081'  # or localhost:8012 if running locally
-    # 'url': 'http://localhost:8012'  # or localhost:8012 if running locally
+    'url': 'http://schema-registry:8081'
+    # 'url': 'http://localhost:8012'
 }
 print(schema_registry_conf)
 schema_registry_client = SchemaRegistryClient(schema_registry_conf)
 
-# Avro schema string
 value_schema_str = """
 {
   "type": "record",
@@ -36,7 +34,6 @@ avro_serializer = AvroSerializer(
     to_dict=lambda obj, ctx: obj
 )
 
-# Kafka producer config
 producer_conf = {
     'bootstrap.servers': 'kafka:9092',
     'key.serializer': StringSerializer('utf_8'),
@@ -45,7 +42,6 @@ producer_conf = {
 
 producer = SerializingProducer(producer_conf)
 
-# Event loop
 while True:
     event = {
         "event_id": str(uuid.uuid4()),
@@ -58,5 +54,5 @@ while True:
     producer.produce(topic="clickstream", key=event["event_id"], value=event)
     print("Sent:", event)
 
-    producer.poll(0)  # Triggers delivery callbacks if any
+    producer.poll(0)
     time.sleep(1)
