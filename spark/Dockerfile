@@ -33,3 +33,12 @@ COPY spark/jars/ /opt/bitnami/spark/jars/
 
 
 #spark-submit --master spark://spark-master:7077 --name KafkaAvroToIceberg --conf "spark.driver.extraClassPath=/opt/bitnami/spark/jars/*" --conf "spark.executor.extraClassPath=/opt/bitnami/spark/jars/*" --conf spark.executor.memory=4g --conf spark.executor.cores=2 --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.iceberg.type=hadoop --conf spark.sql.catalog.iceberg.warehouse=s3a://iceberg/warehouse --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 --conf spark.hadoop.fs.s3a.access.key=minioadmin --conf spark.hadoop.fs.s3a.secret.key=minioadmin --conf spark.hadoop.fs.s3a.path.style.access=true --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.defaultCatalog=iceberg /opt/bitnami/spark/app/avro_consumer.py
+
+#JARS
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\aws-java-sdk-bundle-1.12.525.jar
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\hadoop-aws-3.3.5.jar
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\iceberg-spark-runtime-3.3_2.12-1.4.3.jar
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\kafka-clients-3.3.1.jar
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\spark-avro_2.12-3.3.1.jar
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\spark-sql-kafka-0-10_2.12-3.3.1.jar
+#C:\Users\Naman.Goyal\PycharmProjects\naman\Real-Time-Fault-Tolerant-Data-Pipeline\spark\jars\spark-token-provider-kafka-0-10_2.12-3.3.1.jar
